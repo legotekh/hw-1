@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Data Saver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        button.danger {
+            background: #e74c3c;
+        }
+        
+        button.danger:hover {
+            background: #c0392b;
+        }
+        
+        .alert {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .data-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #e9ecef; text-align: left; font-size: 13px; }
+        thead th { background: #f1f5f9; position: sticky; top: 0; }
+        
+        .stored-data { margin-top: 20px; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 6px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+        .delete-btn:hover { background: #c0392b; }
+        .clear-all-btn { background: #e74c3c; margin-top: 10px; }
+        .clear-all-btn:hover { background: #c0392b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API Data Saver</h1>
+        
+        <div class="section">
+            <h2>Fetch Data from JSONPlaceholder API</h2>
+            <div id="alert-container"></div>
+            
+            <form id="fetch-form">
+                <div class="form-group">
+                    <label for="endpoint">API Endpoint:</label>
+                    <select id="endpoint" name="endpoint" required>
+                        <option value="">Select endpoint...</option>
+                        <option value="/posts">Posts</option>
+                        <option value="/users">Users</option>
+                        <option value="/albums">Albums</option>
+                        <option value="/photos">Photos</option>
+                        <option value="/todos">Todos</option>
+                        <option value="/comments">Comments</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="userId">User ID (optional):</label>
+                    <input type="number" id="userId" name="userId" placeholder="e.g., 1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="postId">Post ID (optional):</label>
+                    <input type="number" id="postId" name="postId" placeholder="e.g., 1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="albumId">Album ID (optional):</label>
+                    <input type="number" id="albumId" name="albumId" placeholder="e.g., 1">
+                </div>
+                
+                <button type="submit">Fetch & Save Data</button>
+            </form>
+            
+            <div id="api-response" class="data-display" style="display: none;">
+                <h3>API Response</h3>
+                <div id="response-table"></div>
+            </div>
+        </div>
+        
+        <div class="section stored-data">
+            <h2>Stored Data from Database</h2>
+            <button id="refresh-data" class="clear-all-btn">Refresh Data</button>
+            <button id="clear-all" class="clear-all-btn">Clear All Data</button>
+            
+            <div id="stored-data-container" class="data-display">
+                <!-- Stored data will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fetchForm = document.getElementById('fetch-form');
+        const alertContainer = document.getElementById('alert-container');
+        const apiResponse = document.getElementById('api-response');
+        const responseTable = document.getElementById('response-table');
+        const storedDataContainer = document.getElementById('stored-data-container');
+        const refreshBtn = document.getElementById('refresh-data');
+        const clearAllBtn = document.getElementById('clear-all');
+
+        function showAlert(message, type = 'success') {
+            alertContainer.innerHTML = `
+                <div class="alert ${type}">${message}</div>
+            `;
+            setTimeout(() => { alertContainer.innerHTML = ''; }, 4000);
+        }
+
+        function inferColumnsFromArray(arr) {
+            // Collect a union of keys from first few objects
+            const sample = arr.slice(0, 5);
+            const cols = new Set();
+            sample.forEach(item => Object.keys(item || {}).forEach(k => cols.add(k)));
+            // Prefer common keys ordering
+            const preferred = ['id', 'userId', 'postId', 'albumId', 'name', 'title', 'body', 'email', 'completed', 'url', 'thumbnailUrl'];
+            const ordered = preferred.filter(k => cols.has(k)).concat([...cols].filter(k => !preferred.includes(k)));
+            return ordered.length ? ordered : [...cols];
+        }
+
+        function renderTableFromData(data) {
+            const asArray = Array.isArray(data) ? data : [data];
+            if (asArray.length === 0) return '<p>No data.</p>';
+            const columns = inferColumnsFromArray(asArray);
+            let thead = '<thead><tr>' + columns.map(c => `<th>${c}</th>`).join('') + '</tr></thead>';
+            let rows = asArray.map(row => {
+                return '<tr>' + columns.map(c => {
+                    let v = row?.[c];
+                    if (v && typeof v === 'object') {
+                        v = JSON.stringify(v);
+                    }
+                    return `<td>${v ?? ''}</td>`;
+                }).join('') + '</tr>';
+            }).join('');
+            return `<table>${thead}<tbody>${rows}</tbody></table>`;
+        }
+
+        function displayApiResponse(data) {
+            responseTable.innerHTML = renderTableFromData(data);
+            apiResponse.style.display = 'block';
+        }
+
+        function displayStoredData(data) {
+            if (!Array.isArray(data) || data.length === 0) {
+                storedDataContainer.innerHTML = '<p>No data stored yet.</p>';
+                return;
+            }
+            // For each stored record, parse JSON and render brief table plus meta
+            storedDataContainer.innerHTML = data.map(item => {
+                let parsed;
+                try { parsed = JSON.parse(item.response_data); } catch { parsed = item.response_data; }
+                const meta = `<div style="margin:6px 0;color:#555;font-size:12px;">Endpoint: <b>${item.api_endpoint}</b> · Params: ${item.parameters || 'None'} · Saved: ${new Date(item.created_at).toLocaleString()}</div>`;
+                const table = typeof parsed === 'object' ? renderTableFromData(parsed) : `<pre>${String(parsed)}</pre>`;
+                return `<div style="margin-bottom:16px;border:1px solid #eee;padding:10px;border-radius:6px;">${meta}${table}<div style="margin-top:8px;"><button class="delete-btn" onclick="deleteRecord(${item.id})">Delete</button></div></div>`;
+            }).join('');
+        }
+
+        async function loadStoredData() {
+            try {
+                const res = await fetch('/api/stored-data');
+                const data = await res.json();
+                displayStoredData(data);
+            } catch (e) {
+                showAlert('Error loading stored data: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteRecord(id) {
+            if (!confirm('Delete this record?')) return;
+            try {
+                const res = await fetch(`/api/stored-data/${id}`, { method: 'DELETE' });
+                const out = await res.json();
+                if (!res.ok || !out.success) throw new Error(out.error || 'Delete failed');
+                showAlert('Record deleted');
+                loadStoredData();
+            } catch (e) {
+                showAlert('Error deleting: ' + e.message, 'error');
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('Delete ALL records?')) return;
+            try {
+                const res = await fetch('/api/stored-data', { method: 'DELETE' });
+                const out = await res.json();
+                if (!res.ok || !out.success) throw new Error(out.error || 'Clear failed');
+                showAlert(out.message || 'All cleared');
+                loadStoredData();
+            } catch (e) {
+                showAlert('Error clearing: ' + e.message, 'error');
+            }
+        }
+
+        fetchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(fetchForm);
+            const payload = {
+                endpoint: formData.get('endpoint'),
+                userId: formData.get('userId') || null,
+                postId: formData.get('postId') || null,
+                albumId: formData.get('albumId') || null,
+            };
+            try {
+                const res = await fetch('/api/fetch-data', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                const out = await res.json();
+                if (!res.ok || !out.success) throw new Error(out.error || 'Fetch failed');
+                showAlert(out.message);
+                displayApiResponse(out.data);
+                loadStoredData();
+            } catch (e) {
+                showAlert('Error fetching: ' + e.message, 'error');
+            }
+        });
+
+        refreshBtn.addEventListener('click', loadStoredData);
+        clearAllBtn.addEventListener('click', clearAllData);
+        
+        // Initial load
+        loadStoredData();
+    </script>
+</body>
+</html>
